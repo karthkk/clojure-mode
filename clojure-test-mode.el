@@ -327,9 +327,40 @@ Retuns the problem overlay if such a position is found, otherwise nil."
                                                 (clojure.test/run-tests))")
                                            #'clojure-test-get-results))))))
 
+(defun reset-which-fn () 
+  "Reset the imenu functions so the updated functions are picked up"
+  (imenu--cleanup)
+  (setq imenu--index-alist nil)
+  (imenu-update-menubar))
+
+(defun clojure-test-run-test-in-runa-repl ()
+  "Run the test at point."
+  (interactive)
+  (reset-which-fn)
+  (save-some-buffers nil (lambda () (equal major-mode 'clojure-mode)))
+  (clojure-test-clear
+   (lambda (&rest args)
+     (let* ((f (which-function))
+	    (test-name (if (listp f) (first f) f)))
+       (slime-eval-async
+        `(swank:interactive-eval
+          ,(format "(binding [clojure.test/report clojure.test.mode/report]
+                        (load-file \"%s\")
+                        (in-repl (clojure.test.mode/clojure-test-mode-test-one-in-ns '%s '%s))
+                        (cons (:name (meta (var %s))) (:status (meta (var %s)))))"
+                   (buffer-file-name)
+                   (slime-current-package) test-name
+                   test-name test-name))
+        (lambda (result-str)
+          (let ((result (read result-str)))
+            (if (cdr result)
+		(clojure-test-extract-result result)
+              (message "Not in a test.")))))))))
+
 (defun clojure-test-run-test ()
   "Run the test at point."
   (interactive)
+  (reset-which-fn)
   (save-some-buffers nil (lambda () (equal major-mode 'clojure-mode)))
   (clojure-test-clear
    (lambda (&rest args)
@@ -404,6 +435,7 @@ Retuns the problem overlay if such a position is found, otherwise nil."
     (define-key map (kbd "C-c C-,") 'clojure-test-run-tests)
     (define-key map (kbd "C-c ,")   'clojure-test-run-tests)
     (define-key map (kbd "C-c M-,") 'clojure-test-run-test)
+    (define-key map (kbd "C-c M-1") 'clojure-test-run-test-in-runa-repl)
     (define-key map (kbd "C-c C-'") 'clojure-test-show-result)
     (define-key map (kbd "C-c '")   'clojure-test-show-result)
     (define-key map (kbd "C-c k")   'clojure-test-clear)
@@ -428,7 +460,7 @@ Retuns the problem overlay if such a position is found, otherwise nil."
     "Enable clojure-test-mode if the current buffer contains a namespace 
 with a \"test.\" bit on it."
     (let ((ns (clojure-find-package))) ; defined in clojure-mode.el
-      (when (search "test." ns)
+      (when (or (search "spec" ns) (search "test" ns))
         (save-window-excursion
           (clojure-test-mode t)))))
   (add-hook 'clojure-mode-hook 'clojure-test-maybe-enable))
