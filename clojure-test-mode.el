@@ -342,9 +342,12 @@ Retuns the problem overlay if such a position is found, otherwise nil."
    (lambda (&rest args)
      (let* ((f (which-function))
 	    (test-name (if (listp f) (first f) f)))
+       (slime-eval `(swank:eval-and-grab-output "(use 'furtive.init)"))
+       (slime-eval `(swank:eval-and-grab-output "(load-furtive-env)"))
        (slime-eval-async
         `(swank:interactive-eval
           ,(format "(binding [clojure.test/report clojure.test.mode/report]
+                        (use 'furtive.init)
                         (load-file \"%s\")
                         (in-repl (clojure.test.mode/clojure-test-mode-test-one-in-ns '%s '%s))
                         (cons (:name (meta (var %s))) (:status (meta (var %s)))))"
